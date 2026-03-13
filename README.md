@@ -15,7 +15,6 @@ A full-stack, machine-learning-powered web application that evaluates password s
 * **Smart Suggestions:** Auto-generates cryptographically stronger alternatives for weak passwords.
 
 ## 🛠️ Local Setup Instructions
-
 ### 1. Start the Flask Backend (API & ML)
 Open a terminal and navigate to the `backend` folder:
 ```bash
@@ -24,8 +23,17 @@ python -m venv venv
 venv\Scripts\activate  # On Windows
 pip install -r requirements.txt
 python train_model.py  # Generates the AI .pkl models from the dataset
-<<<<<<< HEAD
-flask run
-=======
-flask run -p 5001
->>>>>>> 32a517a3aaad539758ef787da0115eba98452b74
+python app.py          # Runs the API on http://127.0.0.1:5001
+```
+
+### 2. Start the React Frontend (Premium Dark UI)
+
+In a second terminal, from the project root:
+
+```bash
+cd frontend
+npm install
+npm start
+```
+
+The app will be available at http://localhost:3000 and will call the Flask API at http://127.0.0.1:5001/analyze.
