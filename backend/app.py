@@ -1,14 +1,20 @@
 from flask import Flask, request, jsonify
 import bcrypt
+import os
 import time
 import random
 import string
+from pathlib import Path
 from collections import Counter
 import joblib
 import numpy as np
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_cors import CORS
+
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_PATH = BASE_DIR / "password_strength_model.pkl"
+VECTORIZER_PATH = BASE_DIR / "vectorizer.pkl"
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for frontend-backend communication
@@ -17,9 +23,15 @@ CORS(app)  # Enable CORS for frontend-backend communication
 limiter = Limiter(get_remote_address, app=app, default_limits=["10 per minute"])
 
 # Load pre-trained ML model for password strength classification
+model = None
+vectorizer = None
 try:
-    model = joblib.load("password_strength_model.pkl")
-    vectorizer = joblib.load("vectorizer.pkl")
+    if MODEL_PATH.is_file() and VECTORIZER_PATH.is_file():
+        model = joblib.load(MODEL_PATH)
+        vectorizer = joblib.load(VECTORIZER_PATH)
+        print("ML model and vectorizer loaded successfully.")
+    else:
+        print("ML model files not found:", MODEL_PATH, VECTORIZER_PATH)
 except Exception as e:
     print("Error loading ML model:", e)
     model, vectorizer = None, None
@@ -76,6 +88,15 @@ def evaluate_password(password):
         "ml_prediction": ml_prediction
     }
 
+@app.route('/health', methods=['GET'])
+def health():
+    """Health check for deploy platforms and local verification."""
+    return jsonify({
+        "status": "ok",
+        "ml_model_loaded": model is not None and vectorizer is not None,
+    })
+
+
 @app.route('/analyze', methods=['POST'])
 @limiter.limit("5 per minute")
 def analyze_password():
@@ -88,5 +109,5 @@ def analyze_password():
     return jsonify(result)
 
 if __name__ == '__main__':
-    # Run on the same host/port the React app expects (http://127.0.0.1:5001)
-    app.run(host="127.0.0.1", port=5001, debug=True)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(host="0.0.0.0", port=port, debug=True)
