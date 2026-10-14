@@ -8,10 +8,10 @@ A full-stack **SDE + AIML** portfolio project: React UI, Flask API, and a traine
 
 | | URL |
 |---|---|
-| **Frontend (Vercel)** | _Add after deploy:_ `https://your-app.vercel.app` |
-| **API (Render)** | _Add after deploy:_ `https://your-api.onrender.com` |
+| **Frontend (Vercel)** | https://visshva-password-analyzer.vercel.app |
+| **API (Render)** | https://ai-password-analyzer-api.onrender.com |
 
-**Health check:** `GET /health` → `{ "status": "ok", "ml_model_loaded": true }`
+**Health check:** https://ai-password-analyzer-api.onrender.com/health → `{ "status": "ok", "ml_model_loaded": true }`
 
 ## How it works
 
