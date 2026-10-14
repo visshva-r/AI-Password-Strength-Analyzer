@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify
-import bcrypt
+import math
 import os
-import time
 import random
 import string
 from pathlib import Path
@@ -16,11 +15,29 @@ BASE_DIR = Path(__file__).resolve().parent
 MODEL_PATH = BASE_DIR / "password_strength_model.pkl"
 VECTORIZER_PATH = BASE_DIR / "vectorizer.pkl"
 
+# Comma-separated list of frontend origins allowed to call the API.
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
+    if origin.strip()
+]
+
 app = Flask(__name__)
-CORS(app)  # Enable CORS for frontend-backend communication
+CORS(app, origins=CORS_ORIGINS)
+
+
+def client_ip():
+    """Rate-limit per visitor; on Render every request reaches the app through Cloudflare."""
+    forwarded = request.headers.get("CF-Connecting-IP") or request.headers.get(
+        "X-Forwarded-For", ""
+    ).split(",")[0].strip()
+    return forwarded or get_remote_address()
+
 
 # Rate limiting to prevent API abuse
-limiter = Limiter(get_remote_address, app=app, default_limits=["10 per minute"])
+limiter = Limiter(client_ip, app=app, default_limits=["10 per minute"])
 
 # Load pre-trained ML model for password strength classification
 model = None
@@ -48,12 +65,55 @@ def calculate_entropy(password):
         entropy -= probability * np.log2(probability)
     return round(entropy, 2)
 
+# Offline brute-force model: the attacker holds the hash and tries every string
+# built from the character classes present. 1e10 guesses/s is a GPU rig against
+# a fast, unsalted hash; slow hashes such as bcrypt would take far longer.
+GUESSES_PER_SECOND = 1e10
+SYMBOL_POOL_SIZE = 33  # printable ASCII punctuation plus space
+SECONDS_PER_YEAR = 365.25 * 86400
+DURATION_UNITS = (
+    ("year", SECONDS_PER_YEAR),
+    ("month", SECONDS_PER_YEAR / 12),
+    ("day", 86400),
+    ("hour", 3600),
+    ("minute", 60),
+    ("second", 1),
+)
+
+
+def character_pool_size(password):
+    """Size of the alphabet an attacker must search, from the classes in use."""
+    pool = 0
+    if any(c in string.ascii_lowercase for c in password):
+        pool += 26
+    if any(c in string.ascii_uppercase for c in password):
+        pool += 26
+    if any(c in string.digits for c in password):
+        pool += 10
+    if any(c not in string.ascii_letters + string.digits for c in password):
+        pool += SYMBOL_POOL_SIZE
+    return pool
+
+
+def format_duration(seconds):
+    if seconds < 1:
+        return "less than a second"
+    for name, size in DURATION_UNITS:
+        if seconds >= size:
+            count = int(seconds // size)
+            return f"{count} {name}{'' if count == 1 else 's'}"
+
+
 def time_to_crack(password):
-    """Estimate time-to-crack based on password hashing simulation."""
-    start = time.time()
-    bcrypt.hashpw(password.encode(), bcrypt.gensalt())
-    end = time.time()
-    return round(end - start, 5)  # Simulated cracking time
+    """Average offline brute-force time from length and character classes."""
+    pool = character_pool_size(password)
+    if pool == 0:
+        return "less than a second"
+    # Half the keyspace on average, kept in log10 so long passwords can't overflow a float.
+    log10_seconds = len(password) * math.log10(pool) - math.log10(2 * GUESSES_PER_SECOND)
+    if log10_seconds >= math.log10(100 * SECONDS_PER_YEAR):
+        return "centuries"
+    return format_duration(10 ** log10_seconds)
 
 def suggest_stronger_password(password):
     """Generate a stronger version of the given password."""
@@ -83,12 +143,13 @@ def evaluate_password(password):
         "password": password,
         "strength": feedback,
         "entropy": entropy,
-        "time_to_crack": f"{crack_time} sec",
+        "time_to_crack": crack_time,
         "suggestion": suggestion,
         "ml_prediction": ml_prediction
     }
 
 @app.route('/health', methods=['GET'])
+@limiter.exempt
 def health():
     """Health check for deploy platforms and local verification."""
     return jsonify({
@@ -98,7 +159,7 @@ def health():
 
 
 @app.route('/analyze', methods=['POST'])
-@limiter.limit("5 per minute")
+@limiter.limit("30 per minute")
 def analyze_password():
     """API endpoint to analyze password strength."""
     data = request.json
@@ -109,5 +170,6 @@ def analyze_password():
     return jsonify(result)
 
 if __name__ == '__main__':
+    # Local development only; Render runs gunicorn (see render.yaml).
     port = int(os.environ.get("PORT", 5001))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="127.0.0.1", port=port, debug=True)

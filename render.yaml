@@ -2,6 +2,8 @@ services:
   - type: web
     name: ai-password-analyzer-api
     runtime: python
+    plan: free
+    region: singapore
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
@@ -9,3 +11,6 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.10.13"
+      # Comma-separated frontend origins, e.g. the Vercel production URL.
+      - key: CORS_ORIGINS
+        sync: false

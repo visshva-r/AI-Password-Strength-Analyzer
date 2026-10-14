@@ -12,12 +12,17 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-scripts": "^3.0.1",
-    "tailwindcss": "^4.1.0",
     "web-vitals": "^2.1.4"
   },
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
-    "start": "set NODE_OPTIONS=--openssl-legacy-provider && react-scripts start",
-    "build": "set NODE_OPTIONS=--openssl-legacy-provider && react-scripts build",
+    "build:css": "tailwindcss -i ./src/tailwind.css -o ./src/tailwind.output.css --minify",
+    "prestart": "npm run build:css",
+    "start": "react-scripts --openssl-legacy-provider start",
+    "prebuild": "npm run build:css",
+    "build": "react-scripts --openssl-legacy-provider build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
@@ -38,5 +43,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.19"
   }
 }

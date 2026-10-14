@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle, Eye, EyeOff, Lock, Shield, XCircle } from 'lucide-react';
 import './index.css';
 
+const API_URL = (process.env.REACT_APP_API_URL || '').replace(/\/$/, '');
+
 // Basic client-side heuristic as a fallback to visualize strength.
 // The backend AI remains the source of truth for insights.
 function computeStrengthScore(password, backendStrength) {
@@ -85,13 +87,16 @@ function App() {
         return;
       }
 
+      if (!API_URL) {
+        setError('REACT_APP_API_URL is not set, so there is no API to call.');
+        return;
+      }
+
       setLoading(true);
       setError('');
 
       try {
-        const apiBase =
-          process.env.REACT_APP_API_URL || 'http://127.0.0.1:5001';
-        const response = await fetch(`${apiBase.replace(/\/$/, '')}/analyze`, {
+        const response = await fetch(`${API_URL}/analyze`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -100,16 +105,21 @@ function App() {
         });
 
         if (response.status === 429) {
-          setError('Rate limit exceeded (5 per min). Please wait a moment.');
-          setLoading(false);
+          setError('Rate limit exceeded (30 per minute). Please wait a moment.');
           return;
+        }
+
+        if (!response.ok) {
+          throw new Error(`API responded with ${response.status}`);
         }
 
         const data = await response.json();
         setResults(data);
         setLastAnalyzedPassword(password);
       } catch (err) {
-        setError('Failed to connect to the Flask server. Is it running?');
+        setError(
+          'Could not reach the analysis API. It may be offline or waking up; try again in a minute.'
+        );
         setResults(null);
       } finally {
         setLoading(false);
@@ -193,7 +203,7 @@ function App() {
                     Password to analyze
                   </label>
                   <span className="text-xs text-slate-500">
-                    Data stays local to your Flask API.
+                    Sent to the Flask API for analysis; never stored.
                   </span>
                 </div>
 
